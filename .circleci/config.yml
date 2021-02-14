@@ -13,17 +13,17 @@ jobs:
             sudo pip install awscli
             sudo pip install aws-sam-cli
             sudo pip install coverage
-      
+
       - run:
           name: Run tests
           working_directory: src/tests/unit
           command: coverage run -m unittest discover
-        
+
       - run:
           name: Run coverage report
           working_directory: src/tests/unit
           command: coverage report -m
 
-      - run: 
+      - run:
           name: Deploy with SAM
-          command: sam deploy --s3-bucket ses-email-app --stack-name receive-email --region us-east-1 --capabilities CAPABILITY_IAM --parameter-overrides EmailBucketName=$EMAIL_BUCKET_NAME EmailDomain=$EMAIL_DOMAIN EmailAddress=$EMAIL_ADDRESS
+          command: sam deploy --s3-bucket $SAM_BUCKET --stack-name receive-email --region us-east-1 --capabilities CAPABILITY_IAM --parameter-overrides EmailBucketName=$EMAIL_BUCKET_NAME EmailDomain=$EMAIL_DOMAIN EmailAddress=$EMAIL_ADDRESS
