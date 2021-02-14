@@ -35,7 +35,7 @@ def get_file(bucket_key, bucket_name, bucket_region):
   return obj_content_string
 
 def parse_email_obj(obj_content_string):
-    
+
   content_type = "none"
   notification_message = "empty"
 
@@ -73,8 +73,11 @@ def get_email_contents(obj_content_string):
         email_payload.append(part.get_payload())
   else:
     email_payload.append(message.get_payload())
-  
+
   string_email_payload = "\n".join(str(item) for item in email_payload)
+
+  if 'Robert+Emily wrote:' in string_email_payload:
+      string_email_payload = string_email_payload.split('Robert+Emily wrote:')[0]
 
   return string_email_payload
 
