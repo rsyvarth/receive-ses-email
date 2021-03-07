@@ -19,16 +19,20 @@ def lambda_handler(event, context):
 
   link_to_file = "https://s3.console.aws.amazon.com/s3/object/" + bucket_name + "?region=" + bucket_region + "&prefix=" + bucket_key
 
-  content_type, email = parse_email_obj(obj_content_string, link_to_file)
+  content_type, message = parse_email_obj(obj_content_string, link_to_file)
 
   try:
-    send_notification_email(content_type, email)
+    send_notification_email(content_type, message)
     return True
   except Exception as error:
     # If we fail to send the message, log the error and try to email the exception instead
     print(error)
-    email = get_notification_template("failed send", f"Failed to send email: {error}", link_to_file)
-    send_notification_email("failed send", email)
+    try:
+        message = get_notification_template("failed send", f"Failed to send email: {error}", link_to_file)
+        send_notification_email("failed send", message)
+    except Exception as e:
+        print(e)
+        return False # If we fail again, just give up
 
 
 def get_file(bucket_key, bucket_name, bucket_region):
@@ -39,25 +43,25 @@ def get_file(bucket_key, bucket_name, bucket_region):
   return obj_content_string
 
 def parse_email_obj(obj_content_string, link_to_file):
-  email = email.message_from_string(obj_content_string)
+  message = email.message_from_string(obj_content_string)
 
   if "Delivery Status Notification (Failure)" in obj_content_string:
     content_type = "delivery failure (bad email)"
     initial_string = obj_content_string.split("An error occurred while trying to deliver the mail to the following recipients:",1)[1]
     notification_message = f"Delivery error sending to: {initial_string.split('------=_Part_')[0].strip()}"
-    email = get_notification_template(content_type, notification_message, link_to_file)
+    message = get_notification_template(content_type, notification_message, link_to_file)
 
   elif "Delivery error report" in obj_content_string:
     content_type = "delivery error (bot)"
     initial_string = obj_content_string.split("envelope-from=",1)[1]
     notification_message = f"Sender: {initial_string.split(';')[0].strip()}"
-    email = get_notification_template(content_type, notification_message, link_to_file)
+    message = get_notification_template(content_type, notification_message, link_to_file)
 
   else:
     content_type = "inbound message"
     # Leave the email untouched when we get an inbound message
 
-  return content_type, email
+  return content_type, message
 
 def get_notification_template(content_type, notification_message, link_to_file):
 

@@ -393,7 +393,7 @@ class ParseEmailTest(unittest.TestCase):
     self.assertEqual(s3_get_file_mock.call_count, 1)
     self.assertEqual(send_email_ses_mock.call_count, 1)
     self.assertEqual('delivery failure (bad email)', send_email_ses_mock.call_args[0][0])
-    self.assertEqual('Message send success.', response)
+    self.assertEqual(True, response)
 
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses)
   @mock.patch('parse_email_and_notify.app.get_file', side_effect=mocked_get_file_from_s3_delivery_error)
@@ -404,7 +404,7 @@ class ParseEmailTest(unittest.TestCase):
     self.assertEqual(s3_get_file_mock.call_count, 1)
     self.assertEqual(send_email_ses_mock.call_count, 1)
     self.assertEqual('delivery error (bot)', send_email_ses_mock.call_args[0][0])
-    self.assertEqual('Message send success.', response)
+    self.assertEqual(True, response)
 
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses)
   @mock.patch('parse_email_and_notify.app.get_file', side_effect=mocked_get_file_from_s3_inbound_message)
@@ -415,7 +415,7 @@ class ParseEmailTest(unittest.TestCase):
     self.assertEqual(s3_get_file_mock.call_count, 1)
     self.assertEqual(send_email_ses_mock.call_count, 1)
     self.assertEqual('inbound message', send_email_ses_mock.call_args[0][0])
-    self.assertEqual('Message send success.', response)
+    self.assertEqual(True, response)
 
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses)
   @mock.patch('parse_email_and_notify.app.get_file', side_effect=mocked_get_file_from_s3_uncategorized)
@@ -426,7 +426,7 @@ class ParseEmailTest(unittest.TestCase):
     self.assertEqual(s3_get_file_mock.call_count, 1)
     self.assertEqual(send_email_ses_mock.call_count, 1)
     self.assertEqual('inbound message', send_email_ses_mock.call_args[0][0])
-    self.assertEqual('Message send success.', response)
+    self.assertEqual(True, response)
 
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses_error)
   @mock.patch('parse_email_and_notify.app.get_file', side_effect=mocked_get_file_from_s3_delivery_failure)
@@ -435,9 +435,10 @@ class ParseEmailTest(unittest.TestCase):
     response = lambda_handler(self.get_sns_event(), "")
 
     self.assertEqual(s3_get_file_mock.call_count, 1)
-    self.assertEqual(send_email_ses_error_mock.call_count, 1)
-    self.assertEqual('delivery failure (bad email)', send_email_ses_error_mock.call_args[0][0])
-    self.assertEqual('Message send failed, error: ses email failed to send', response)
+    self.assertEqual(send_email_ses_error_mock.call_count, 2)
+    self.assertEqual('delivery failure (bad email)', send_email_ses_error_mock.call_args_list[0][0][0])
+    self.assertEqual('failed send', send_email_ses_error_mock.call_args_list[1][0][0])
+    self.assertEqual(False, response)
 
   def get_sns_event(self):
     return {
