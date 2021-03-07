@@ -38,8 +38,8 @@ def mocked_get_file_from_s3_delivery_failure(bucket_key, bucket_name, bucket_reg
             Message-ID: <010001771030627d-3007cb08-d15c-4031-9e78-a9f66d69b2da-000000@email.amazonses.com>
             Subject: Delivery Status Notification (Failure)
             MIME-Version: 1.0
-            Content-Type: multipart/report; 
-              boundary="----=_Part_5909269_2113273023.1610884342420"; 
+            Content-Type: multipart/report;
+              boundary="----=_Part_5909269_2113273023.1610884342420";
               report-type=delivery-status
             X-SES-Outgoing: 2021.01.17-54.240.14.86
             Feedback-ID: 1.us-east-1.D1mWDvwUtiZJdKFArGKkGBe9wfRCdAX2ofq5lyeEo20=:AmazonSES
@@ -377,7 +377,7 @@ def mocked_get_file_from_s3_uncategorized(bucket_key, bucket_name, bucket_region
   return "Just a string, cannot be categorized."
 
 def mocked_send_email_through_ses(content_type, notification_email_content):
-  return 
+  return
 
 def mocked_send_email_through_ses_error(content_type, notification_email_content):
   raise Exception('ses email failed to send')
@@ -405,7 +405,7 @@ class ParseEmailTest(unittest.TestCase):
     self.assertEqual(send_email_ses_mock.call_count, 1)
     self.assertEqual('delivery error (bot)', send_email_ses_mock.call_args[0][0])
     self.assertEqual('Message send success.', response)
-  
+
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses)
   @mock.patch('parse_email_and_notify.app.get_file', side_effect=mocked_get_file_from_s3_inbound_message)
   def test_inbound_message(self, s3_get_file_mock, send_email_ses_mock):
@@ -425,7 +425,7 @@ class ParseEmailTest(unittest.TestCase):
 
     self.assertEqual(s3_get_file_mock.call_count, 1)
     self.assertEqual(send_email_ses_mock.call_count, 1)
-    self.assertEqual('uncategorized email type', send_email_ses_mock.call_args[0][0])
+    self.assertEqual('inbound message', send_email_ses_mock.call_args[0][0])
     self.assertEqual('Message send success.', response)
 
   @mock.patch('parse_email_and_notify.app.send_notification_email', side_effect=mocked_send_email_through_ses_error)

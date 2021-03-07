@@ -2,6 +2,8 @@ import os
 import json
 import boto3
 import email
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 s3 = boto3.resource('s3')
 sns_client = boto3.client('sns', region_name=os.environ['AWS_REGION'])
@@ -15,14 +17,12 @@ def lambda_handler(event, context):
 
   obj_content_string = get_file(bucket_key, bucket_name, bucket_region)
 
-  content_type, notification_message = parse_email_obj(obj_content_string)
-
   link_to_file = "https://s3.console.aws.amazon.com/s3/object/" + bucket_name + "?region=" + bucket_region + "&prefix=" + bucket_key
 
-  notification_email_content = get_notification_template(content_type, notification_message, link_to_file)
+  content_type, email = parse_email_obj(obj_content_string, link_to_file)
 
   try:
-    send_notification_email(content_type, notification_email_content)
+    send_notification_email(content_type, email)
     return "Message send success."
   except Exception as error:
     return f"Message send failed, error: {error}"
@@ -34,52 +34,29 @@ def get_file(bucket_key, bucket_name, bucket_region):
 
   return obj_content_string
 
-def parse_email_obj(obj_content_string):
-
-  content_type = "none"
-  notification_message = "empty"
+def parse_email_obj(obj_content_string, link_to_file):
 
   if "Delivery Status Notification (Failure)" in obj_content_string:
     content_type = "delivery failure (bad email)"
     initial_string = obj_content_string.split("An error occurred while trying to deliver the mail to the following recipients:",1)[1]
     notification_message = f"Delivery error sending to: {initial_string.split('------=_Part_')[0].strip()}"
+    email = get_notification_template(content_type, notification_message, link_to_file)
   elif "Delivery error report" in obj_content_string:
     content_type = "delivery error (bot)"
     initial_string = obj_content_string.split("envelope-from=",1)[1]
     notification_message = f"Sender: {initial_string.split(';')[0].strip()}"
-  elif "MIME-Version: 1.0" in obj_content_string:
-    content_type = "inbound message"
-    notification_message = get_email_contents(obj_content_string)
+    email = get_notification_template(content_type, notification_message, link_to_file)
   else:
-    content_type = "uncategorized email type"
-    notification_message = "See S3 file link for message details."
+    content_type = "inbound message"
+    email = get_email_contents(obj_content_string)
 
-  return content_type, notification_message
+  return content_type, email
 
 def get_email_contents(obj_content_string):
 
   message = email.message_from_string(obj_content_string)
 
-  email_payload = [
-    f"<p>To: {message['to']}</p>",
-    f"<p>From: {message['from']}</p>",
-    f"<p>Subject: {message['subject']}</p>",
-    "<p>Body: </p>",
-  ]
-
-  if message.is_multipart():
-    for part in message.walk():
-      if part.get_content_type() == 'text/plain':
-        email_payload.append(part.get_payload())
-  else:
-    email_payload.append(message.get_payload())
-
-  string_email_payload = "\n".join(str(item) for item in email_payload)
-
-  if 'Robert+Emily wrote:' in string_email_payload:
-      string_email_payload = string_email_payload.split('Robert+Emily wrote:')[0]
-
-  return string_email_payload
+  return message
 
 def get_notification_template(content_type, notification_message, link_to_file):
 
@@ -92,28 +69,33 @@ def get_notification_template(content_type, notification_message, link_to_file):
   notification_email_contents = notification_email_contents.replace("{notification_message}", notification_message)
   notification_email_contents = notification_email_contents.replace("{link_to_file}", link_to_file)
 
-  return notification_email_contents
+  # Create a MIME container.
+  msg = MIMEMultipart()
+  # Attach the text part to the MIME message.
+  msg.attach(MIMEText(notification_email_contents, _subtype="html"))
 
-def send_notification_email(content_type, notification_email_content):
+  msg['Subject'] = "Email received - " + content_type
 
-    response = ses_client.send_email(
-        Source = "Email received notification <emailreceived@" + os.environ['EMAIL_DOMAIN'] + ">",
+  return msg
+
+def send_notification_email(content_type, message):
+
+    # Replace message To with our address
+    del message['To']
+    message['To'] = os.environ['EMAIL_ADDRESS']
+
+    if 'From' not in message:
+        message['From'] = "Email received notification <emailreceived@" + os.environ['EMAIL_DOMAIN'] + ">",
+
+    response = ses_client.send_raw_email(
+        Source = message['From'],
         Destination = {
-            "ToAddresses" : [
-            os.environ['EMAIL_ADDRESS']
+            "ToAddresses": [
+                message['To']
             ]
         },
-        Message = {
-            "Subject": {
-            "Charset": "UTF-8",
-            "Data": "Email received - " + content_type
-            },
-            "Body": {
-                "Html": {
-                    "Charset": "UTF-8",
-                    "Data": notification_email_content
-                }
-            }
+        RawMessage={
+            'Data': message.to_string()
         }
     )
 
