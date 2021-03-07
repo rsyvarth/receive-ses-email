@@ -23,9 +23,13 @@ def lambda_handler(event, context):
 
   try:
     send_notification_email(content_type, email)
-    return "Message send success."
+    return True
   except Exception as error:
-    return f"Message send failed, error: {error}"
+    # If we fail to send the message, log the error and try to email the exception instead
+    print(error)
+    email = get_notification_template("failed send", f"Failed to send email: {error}", link_to_file)
+    send_notification_email("failed send", email)
+
 
 def get_file(bucket_key, bucket_name, bucket_region):
 
@@ -35,28 +39,25 @@ def get_file(bucket_key, bucket_name, bucket_region):
   return obj_content_string
 
 def parse_email_obj(obj_content_string, link_to_file):
+  email = email.message_from_string(obj_content_string)
 
   if "Delivery Status Notification (Failure)" in obj_content_string:
     content_type = "delivery failure (bad email)"
     initial_string = obj_content_string.split("An error occurred while trying to deliver the mail to the following recipients:",1)[1]
     notification_message = f"Delivery error sending to: {initial_string.split('------=_Part_')[0].strip()}"
     email = get_notification_template(content_type, notification_message, link_to_file)
+
   elif "Delivery error report" in obj_content_string:
     content_type = "delivery error (bot)"
     initial_string = obj_content_string.split("envelope-from=",1)[1]
     notification_message = f"Sender: {initial_string.split(';')[0].strip()}"
     email = get_notification_template(content_type, notification_message, link_to_file)
+
   else:
     content_type = "inbound message"
-    email = get_email_contents(obj_content_string)
+    # Leave the email untouched when we get an inbound message
 
   return content_type, email
-
-def get_email_contents(obj_content_string):
-
-  message = email.message_from_string(obj_content_string)
-
-  return message
 
 def get_notification_template(content_type, notification_message, link_to_file):
 
@@ -80,22 +81,21 @@ def get_notification_template(content_type, notification_message, link_to_file):
 
 def send_notification_email(content_type, message):
 
-    # Replace message To with our address
-    del message['To']
-    message['To'] = os.environ['EMAIL_ADDRESS']
+    # Remove incorrect headers for our forwarding
+    del message['Received']
+    del message['Return-Path']
 
-    if 'From' not in message:
-        message['From'] = "Email received notification <emailreceived@" + os.environ['EMAIL_DOMAIN'] + ">",
+    # Replace message To with our address
+    message.replace_header('To', os.environ['EMAIL_ADDRESS'])
+
+    # Set the "Reply-To" to our original "From" so when we reply to the message
+    # it goes to the original sender, not emailreceived@...
+    message['Reply-To'] = message['From']
+    message.replace_header('From', "Email received notification <emailreceived@" + os.environ['EMAIL_DOMAIN'] + ">")
 
     response = ses_client.send_raw_email(
-        Source = message['From'],
-        Destination = {
-            "ToAddresses": [
-                message['To']
-            ]
-        },
         RawMessage={
-            'Data': message.to_string()
+            'Data': message.as_bytes()
         }
     )
 
